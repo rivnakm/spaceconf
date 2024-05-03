@@ -1,0 +1,15 @@
+[package]
+name = "spaceconf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono = { version = "0.4.38", features = ["serde"] }
+clap = { version = "4.5.4", features = ["derive"] }
+crc32fast = "1.4.0"
+dirs = "5.0.1"
+git2 = "0.18.3"
+resolve-path = "0.1.0"
+serde = { version = "1.0.199", features = ["derive"] }
+sudo = "0.6.0"
+toml = "0.8.12"

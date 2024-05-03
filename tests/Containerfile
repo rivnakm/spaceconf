@@ -1,0 +1,11 @@
+FROM rust:latest
+
+WORKDIR /app
+COPY . .
+
+RUN cargo build --release
+
+COPY tests/fixtures /root/.config/spaceconf
+
+CMD ["python3", "tests/test.py"]
+

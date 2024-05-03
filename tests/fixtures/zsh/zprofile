@@ -1,0 +1,7 @@
+export LANG=en_US.UTF-8
+export EDITOR=nvim
+
+# Use clang as default C/C++ compiler
+export CC=clang
+export CXX=clang++
+export CMAKE_GENERATOR=Ninja

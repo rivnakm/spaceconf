@@ -5,7 +5,7 @@ fn default_context() -> Context {
     let mut context = Context::new();
 
     if let Ok(hostname) = hostname::get() {
-        context.insert("hostname", &hostname);
+        context.insert("hostname", &hostname.to_string_lossy());
     }
 
     // Arch

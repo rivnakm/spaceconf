@@ -27,6 +27,13 @@ def main():
     assert_eq(output[0], '"/root/.zshrc" is up to date')
     assert_eq(output[1], '"/root/.zprofile" is up to date')
 
+    subprocess.run("echo hello >> /root/.config/spaceconf/zsh/zshrc", shell=True, check=True)
+    subprocess.run("echo hello >> /root/.config/spaceconf/zsh/zprofile", shell=True, check=True)
+    output = spaceconf(["check"])
+    output = output.split("\n")
+    assert_eq(output[0], '"/root/.zshrc" is NOT up to date')
+    assert_eq(output[1], '"/root/.zprofile" is NOT up to date')
+
     print("All tests passed!")
 
 if __name__ == "__main__":

@@ -3,19 +3,14 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Fixture {
-    #[serde(default)]
-    pub r#type: FixtureType,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum FixtureType {
+#[serde(tag = "type")]
+pub enum Fixture {
     Files(FilesSetup),
     Repository(RepositorySetup),
 }
 
-impl Default for FixtureType {
+impl Default for Fixture {
     fn default() -> Self {
         Self::Files(Default::default())
     }

@@ -5,3 +5,4 @@ export EDITOR=nvim
 export CC=clang
 export CXX=clang++
 export CMAKE_GENERATOR=Ninja
+

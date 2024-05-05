@@ -5,6 +5,7 @@ use fixture::Fixture;
 use resolve_path::PathResolveExt;
 
 mod fixture;
+mod template;
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -86,7 +87,7 @@ fn get_fixtures() -> std::io::Result<Vec<Fixture>> {
             let fixure_dir_entries = std::fs::read_dir(entry.path()).unwrap();
             fixure_dir_entries
                 .filter_map(|entry| entry.ok())
-                .any(|entry| entry.file_name() == "fixture.toml")
+                .any(|entry| entry.file_name() == "fixture.json")
         })
         .map(|entry| entry.path())
         .collect();
@@ -94,17 +95,17 @@ fn get_fixtures() -> std::io::Result<Vec<Fixture>> {
     let fixtures = fixture_dirs
         .into_iter()
         .map(|fixture_dir| {
-            let fixture_file = fixture_dir.join("fixture.toml");
+            let fixture_file = fixture_dir.join("fixture.json");
             let fixture = std::fs::read_to_string(fixture_file).unwrap();
-            let mut fixture: Fixture = toml::from_str(&fixture).unwrap();
-            match &mut fixture.r#type {
-                fixture::FixtureType::Files(ref mut setup) => {
+            let mut fixture: Fixture = serde_json::from_str(&fixture).unwrap();
+            match &mut fixture {
+                fixture::Fixture::Files(ref mut setup) => {
                     for file in &mut setup.files {
                         file.src = fixture_dir.join(&file.src);
                         file.dest = file.dest.resolve().to_path_buf();
                     }
                 }
-                fixture::FixtureType::Repository(_) => {
+                fixture::Fixture::Repository(_) => {
                     unimplemented!();
                 }
             }
@@ -120,9 +121,9 @@ fn load_fixtures(root: bool) -> std::io::Result<Vec<Fixture>> {
 
     Ok(fixtures
         .into_iter()
-        .filter(|fixture| match &fixture.r#type {
-            fixture::FixtureType::Files(setup) => setup.root == root,
-            fixture::FixtureType::Repository(_) => !root,
+        .filter(|fixture| match &fixture {
+            fixture::Fixture::Files(setup) => setup.root == root,
+            fixture::Fixture::Repository(_) => !root,
         })
         .collect())
 }
@@ -135,25 +136,25 @@ fn list_fixtures(fixtures: Vec<Fixture>) {
 
 fn check_fixtures(fixtures: Vec<Fixture>) {
     for fixture in fixtures {
-        match &fixture.r#type {
-            fixture::FixtureType::Files(setup) => {
+        match &fixture {
+            fixture::Fixture::Files(setup) => {
                 for file in &setup.files {
                     if !file.dest.exists() {
                         println!("{:?} does not exist", file.dest);
                         continue;
                     }
 
-                    let src_hash = crc32fast::hash(std::fs::read(&file.src).unwrap().as_slice());
-                    let dest_hash = crc32fast::hash(std::fs::read(&file.dest).unwrap().as_slice());
+                    let src_time = file.src.metadata().unwrap().modified().unwrap();
+                    let dest_time = file.dest.metadata().unwrap().modified().unwrap();
 
-                    if src_hash == dest_hash {
+                    if src_time <= dest_time {
                         println!("{:?} is up to date", file.dest);
                     } else {
-                        println!("{:?} is out of date", file.dest);
+                        println!("{:?} is NOT up to date", file.dest);
                     }
                 }
             }
-            fixture::FixtureType::Repository(_) => {
+            fixture::Fixture::Repository(_) => {
                 unimplemented!("'check' command is not supported for repository fixtures");
             }
         }
@@ -162,17 +163,21 @@ fn check_fixtures(fixtures: Vec<Fixture>) {
 
 fn apply_fixtures(fixtures: Vec<Fixture>, args: ApplyArgs) {
     for fixture in fixtures {
-        match &fixture.r#type {
-            fixture::FixtureType::Files(setup) => {
+        match &fixture {
+            fixture::Fixture::Files(setup) => {
                 for file in &setup.files {
                     if args.revert {
                         unimplemented!("store the original file content and restore it here");
                     } else {
-                        std::fs::copy(&file.src, &file.dest).unwrap();
+                        let input = std::fs::read_to_string(&file.src).unwrap();
+                        let output = template::render(&input).unwrap();
+
+                        // TODO: make backup of the original file
+                        std::fs::write(&file.dest, output).unwrap();
                     }
                 }
             }
-            fixture::FixtureType::Repository(_) => {
+            fixture::Fixture::Repository(_) => {
                 unimplemented!("'apply' command is not supported for repository fixtures");
             }
         }

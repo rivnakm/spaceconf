@@ -5,6 +5,8 @@ use fixture::Fixture;
 use resolve_path::PathResolveExt;
 
 mod fixture;
+mod git;
+mod repo;
 mod template;
 
 #[derive(Parser)]
@@ -20,11 +22,8 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Synchronize repository with remote
-    Sync,
-
-    /// Save local configuration to repository
-    Save,
+    /// Clone repository
+    Clone(CloneArgs),
 
     /// Apply configuration to the system
     Apply(ApplyArgs),
@@ -34,6 +33,12 @@ enum Command {
 
     /// Check if local configuration is up-to-date
     Check,
+}
+
+#[derive(Parser)]
+struct CloneArgs {
+    /// Repository URL
+    repository: String,
 }
 
 #[derive(Parser)]
@@ -50,7 +55,23 @@ struct ApplyArgs {
 fn main() {
     let cli = Args::parse();
 
-    // TODO: check if there's a new commit in the remote repo, warn the user, and exit
+    let repo_dir = get_repo_dir();
+
+    if let Command::Clone(args) = &cli.command {
+        if repo_dir.exists() {
+            eprintln!("Repository already exists, please run 'spaceconf sync' instead");
+            std::process::exit(1);
+        }
+
+        println!("Cloning repository...");
+        git::clone(&args.repository, &repo_dir, None);
+        std::process::exit(0);
+    }
+
+    if !repo_dir.exists() {
+        eprintln!("Repository does not exist, please run 'spaceconf clone <repo URL>' first");
+        std::process::exit(1);
+    }
 
     if cli.system {
         sudo::escalate_if_needed().expect("Failed to acquire root privileges");
@@ -105,8 +126,8 @@ fn get_fixtures() -> std::io::Result<Vec<Fixture>> {
                         file.dest = file.dest.resolve().to_path_buf();
                     }
                 }
-                fixture::Fixture::Repository(_) => {
-                    unimplemented!();
+                fixture::Fixture::Repository(ref mut setup) => {
+                    setup.path = setup.path.resolve().to_path_buf();
                 }
             }
             fixture
@@ -130,7 +151,22 @@ fn load_fixtures(root: bool) -> std::io::Result<Vec<Fixture>> {
 
 fn list_fixtures(fixtures: Vec<Fixture>) {
     for fixture in fixtures {
-        println!("{:?}", fixture);
+        match &fixture {
+            fixture::Fixture::Files(setup) => {
+                println!(
+                    "Fixture: {}",
+                    setup.files[0].src.parent().unwrap().display()
+                );
+                for file in &setup.files {
+                    println!("  File: {}", file.dest.display());
+                }
+            }
+            fixture::Fixture::Repository(setup) => {
+                println!("Fixture: {}", setup.repository);
+                println!("  Reference: {:?}", setup.reference);
+                println!("  Path: {}", setup.path.display());
+            }
+        }
     }
 }
 
@@ -168,17 +204,21 @@ fn apply_fixtures(fixtures: Vec<Fixture>, args: ApplyArgs) {
                 for file in &setup.files {
                     if args.revert {
                         unimplemented!("store the original file content and restore it here");
+                    } else if file.raw {
+                        println!("Applying {:?}", file.dest);
+                        std::fs::copy(&file.src, &file.dest).unwrap();
                     } else {
                         let input = std::fs::read_to_string(&file.src).unwrap();
                         let output = template::render(&input).unwrap();
 
+                        println!("Applying {:?}", file.dest);
                         // TODO: make backup of the original file
                         std::fs::write(&file.dest, output).unwrap();
                     }
                 }
             }
-            fixture::Fixture::Repository(_) => {
-                unimplemented!("'apply' command is not supported for repository fixtures");
+            fixture::Fixture::Repository(setup) => {
+                repo::apply(setup.clone());
             }
         }
     }

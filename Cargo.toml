@@ -7,7 +7,6 @@ edition = "2021"
 chrono = { version = "0.4.38", features = ["serde"] }
 clap = { version = "4.5.4", features = ["derive"] }
 dirs = "5.0.1"
-git2 = "0.18.3"
 hostname = "0.4.0"
 num_cpus = "1.16.0"
 resolve-path = "0.1.0"

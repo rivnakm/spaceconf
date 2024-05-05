@@ -29,6 +29,9 @@ pub struct FilesSetup {
 pub struct File {
     pub src: PathBuf,
     pub dest: PathBuf,
+
+    #[serde(default)]
+    pub raw: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -39,6 +42,8 @@ pub struct RepositorySetup {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+#[serde(tag = "type", content = "value")]
 pub enum Reference {
     Branch(String),
     Tag(String),

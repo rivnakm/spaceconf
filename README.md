@@ -2,6 +2,7 @@
 Simple configuration manager for dotfiles and system configuration files
 
 ![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
+[![Test Action](https://github.com/mrivnak/spaceconf/actions/workflows/test.yml/badge.svg)](https://github.com/mrivnak/spaceconf/actions/workflows/test.yml)
 
 ## Features
 

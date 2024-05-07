@@ -1,0 +1,40 @@
+name: Test Action
+
+on:
+  push:
+    branches:
+      - '*'
+      - '!v*'
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.platform }}
+    permissions:
+      checks: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Unit Tests
+        run: cargo test
+
+      - name: Run Integration Tests
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          docker build -t spaceconf-tests -f tests/Containerfile .
+          docker run --rm spaceconf-tests
+
+      - name: Clippy check
+        if: matrix.platform == 'ubuntu-latest'
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features

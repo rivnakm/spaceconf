@@ -36,7 +36,6 @@ Simple configuration manager for dotfiles and system configuration files
 ### File Templating with [Tera](https://keats.github.io/tera/)
 
 ```plaintext
-# See https://wiki.hyprland.org/Configuring/Monitors/
 {% if hostname == "gentoo-desktop" -%}
 monitor=DP-1, 3440x1440@165.00, 2560x0, 1
 monitor=DP-2, 2560x1440@239.96, 0x0, 1

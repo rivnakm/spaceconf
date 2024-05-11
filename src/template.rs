@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use tera::Context;
 
 fn default_context() -> Context {
@@ -32,9 +34,13 @@ fn default_context() -> Context {
     context
 }
 
-pub fn render(template: &str) -> Result<String, tera::Error> {
+pub fn render(template: &str, secrets: &HashMap<String, String>) -> Result<String, tera::Error> {
     let mut tera = tera::Tera::default();
-    let context = default_context();
+    let mut context = default_context();
+
+    if !secrets.is_empty() {
+        context.extend(Context::from_serialize(secrets).unwrap());
+    }
 
     tera.render_str(template, &context)
 }

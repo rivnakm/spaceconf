@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +23,9 @@ pub struct FilesSetup {
 
     #[serde(default)]
     pub root: bool,
+
+    #[serde(skip)]
+    pub secrets: HashMap<String, String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -3,6 +3,7 @@ Simple configuration manager for dotfiles and system configuration files
 
 ![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
 [![Test Action](https://github.com/mrivnak/spaceconf/actions/workflows/test.yml/badge.svg)](https://github.com/mrivnak/spaceconf/actions/workflows/test.yml)
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/mrivnak/spaceconf?display_name=tag&sort=semver)
 
 ## Features
 
@@ -43,6 +44,24 @@ monitor=DP-2, 2560x1440@239.96, 0x0, 1
 {% elif hostname == "gentoo-laptop" -%}
 monitor=eDP-1, 2560x1440@165.00, 0x0, 1
 {%- endif %}
+```
+
+### Secrets support
+
+Secrets that may be stored in existing config files, like an API key for a weather toolbar, can be obfuscated from your dotfiles repo and added on apply
+
+> `<fixture_dir>/secrets.json`
+
+```json
+{
+    "API_KEY": "12345abcde"
+}
+```
+
+> `file.conf`
+
+```plaintext
+get-data --api-key {{ API_KEY }}
 ```
 
 ## Getting started

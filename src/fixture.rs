@@ -44,7 +44,7 @@ pub struct RepositorySetup {
     pub path: PathBuf,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "type", content = "value")]
 pub enum Reference {

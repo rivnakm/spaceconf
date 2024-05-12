@@ -34,13 +34,30 @@ fn default_context() -> Context {
     context
 }
 
-pub fn render(template: &str, secrets: &HashMap<String, String>) -> Result<String, tera::Error> {
+pub fn render(template: &str, extra: &HashMap<String, String>) -> Result<String, tera::Error> {
     let mut tera = tera::Tera::default();
     let mut context = default_context();
 
-    if !secrets.is_empty() {
-        context.extend(Context::from_serialize(secrets).unwrap());
+    if !extra.is_empty() {
+        context.extend(Context::from_serialize(extra).unwrap());
     }
 
     tera.render_str(template, &context)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    #[test]
+    fn test_render() {
+        let template = "Hello, {{ name }}!";
+        let mut extra = HashMap::new();
+        extra.insert("name".to_string(), "world".to_string());
+
+        let result = render(template, &extra).unwrap();
+        assert_eq!(result, "Hello, world!");
+    }
 }

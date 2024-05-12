@@ -1,7 +1,9 @@
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand};
 
 use spaceconf::git;
-use spaceconf::{apply_fixtures, check_fixtures, get_repo_dir, list_fixtures, load_fixtures};
+use spaceconf::{apply_fixtures, check_fixtures, list_fixtures, load_fixtures};
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -85,4 +87,9 @@ fn main() {
         }
         _ => unimplemented!(),
     }
+}
+
+fn get_repo_dir() -> PathBuf {
+    let config_dir = dirs::config_dir().unwrap();
+    config_dir.join("spaceconf")
 }

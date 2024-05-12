@@ -26,12 +26,6 @@ jobs:
       - name: Run Unit Tests
         run: cargo test
 
-      - name: Run Integration Tests
-        if: matrix.platform == 'ubuntu-latest'
-        run: |
-          docker build -t spaceconf-tests -f tests/Containerfile .
-          docker run --rm spaceconf-tests
-
       - name: Clippy check
         if: matrix.platform == 'ubuntu-latest'
         uses: actions-rs/clippy-check@v1

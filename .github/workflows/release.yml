@@ -1,0 +1,82 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ macos-latest, ubuntu-latest ]
+    permissions:
+      contents: write
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set release version
+        run: pwsh ./scripts/SetVersion.ps1 ${{ github.ref_name }}
+
+      - name: Install Rust aarch64-apple-darwin
+        if: matrix.platform == 'macos-latest'
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: aarch64-apple-darwin
+
+      - name: Install Rust x86_64-apple-darwin
+        if: matrix.platform == 'macos-latest'
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-apple-darwin
+
+      - name: Install Rust Linux x86_64-unknown-linux-gnu
+        if: matrix.platform == 'ubuntu-latest'
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-unknown-linux-gnu
+
+
+      - name: Create releases directory
+        run: mkdir release
+
+      - name: Build macOS aarch64-apple-darwin
+        if: matrix.platform == 'macos-latest'
+        run: |
+          cargo build --release --target aarch64-apple-darwin
+          tar cvfJ ./release/spaceconf_${{ github.ref_name }}_macos_arm64.tar.xz ./target/aarch64-apple-darwin/release/spaceconf
+
+      - name: Build macOS x86_64-apple-darwin
+        if: matrix.platform == 'macos-latest'
+        run: |
+          cargo build --release --target x86_64-apple-darwin
+          tar cvfJ ./release/spaceconf_${{ github.ref_name }}_macos_amd64.tar.xz ./target/x86_64-apple-darwin/release/spaceconf
+
+      - name: Build Linux x86_64-unknown-linux-gnu
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          cargo build --release --target x86_64-unknown-linux-gnu
+          tar cvfJ ./release/spaceconf_${{ github.ref_name }}_linux_amd64.tar.xz ./target/x86_64-unknown-linux-gnu/release/spaceconf
+
+      - name: Build Changelog
+        id: github_release
+        uses: mikepenz/release-changelog-builder-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: ${{ steps.github_release.outputs.changelog }}
+          prerelease: ${{ steps.check-prerelease.outputs.prerelease }}
+          fail_on_unmatched_files: false
+          files: |
+            ./release/*.tar.xz
+          name: Release ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}

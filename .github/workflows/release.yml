@@ -10,7 +10,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [ macos-latest, ubuntu-latest, windows-latest ]
+        platform: [ macos-latest, ubuntu-latest ]
+    permissions:
+      contents: write
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -40,12 +42,6 @@ jobs:
           toolchain: stable
           target: x86_64-unknown-linux-gnu
 
-      - name: Install Rust Windows x86_64-pc-windows-msvc
-        if: matrix.platform == 'windows-latest'
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: x86_64-pc-windows-msvc
 
       - name: Create releases directory
         run: mkdir release
@@ -55,7 +51,6 @@ jobs:
         run: |
           cargo build --release --target aarch64-apple-darwin
           tar cvfJ ./release/spaceconf_${{ github.ref_name }}_macos_arm64.tar.xz ./target/aarch64-apple-darwin/release/spaceconf
-
 
       - name: Build macOS x86_64-apple-darwin
         if: matrix.platform == 'macos-latest'
@@ -68,18 +63,6 @@ jobs:
         run: |
           cargo build --release --target x86_64-unknown-linux-gnu
           tar cvfJ ./release/spaceconf_${{ github.ref_name }}_linux_amd64.tar.xz ./target/x86_64-unknown-linux-gnu/release/spaceconf
-
-      - name: Build Windows x86_64-pc-windows-msvc
-        if: matrix.platform == 'windows-latest'
-        run: |
-          cargo build --release --target x86_64-pc-windows-msvc
-          Compress-Archive -Path ./target/x86_64-pc-windows-msvc/release/spaceconf.exe -DestinationPath ./release/spaceconf_${{ github.ref_name }}_windows_amd64.zip
-
-      - name: Check prerelease
-        id: check-prerelease
-        run: |
-          pip3 install semver
-          python3 -c "import semver; print('prerelease=true') if semver.Version.parse('${{ github.ref_name }}'.replace('v', '')).prerelease else print('prerelease=false')" >> $GITHUB_OUTPUT
 
       - name: Build Changelog
         id: github_release
@@ -94,7 +77,6 @@ jobs:
           prerelease: ${{ steps.check-prerelease.outputs.prerelease }}
           fail_on_unmatched_files: false
           files: |
-            ./release/*.zip
             ./release/*.tar.xz
           name: Release ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}

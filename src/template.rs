@@ -21,15 +21,8 @@ fn default_context() -> Context {
     #[cfg(target_os = "linux")]
     context.insert("os", "linux");
 
-    #[cfg(target_os = "macos")]
-    context.insert("os", "macos");
-
-    #[cfg(target_os = "windows")]
-    context.insert("os", "windows");
-
     // Misc info
     context.insert("nproc", &num_cpus::get());
-    context.insert("wsl", &wsl::is_wsl());
 
     context
 }

@@ -10,10 +10,6 @@ use spaceconf::{apply_fixtures, check_fixtures, list_fixtures, load_fixtures};
 struct Args {
     #[command(subcommand)]
     command: Command,
-
-    /// Operate on system configuration files
-    #[arg(short, long)]
-    system: bool,
 }
 
 #[derive(Subcommand)]
@@ -69,11 +65,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    if cli.system {
-        sudo::escalate_if_needed().expect("Failed to acquire root privileges");
-    }
-
-    let fixtures = load_fixtures(get_repo_dir(), cli.system).unwrap();
+    let fixtures = load_fixtures(get_repo_dir()).unwrap();
 
     match cli.command {
         Command::List => {

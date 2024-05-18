@@ -59,6 +59,9 @@ pub fn list_fixtures(fixtures: Vec<Fixture>) {
                     "Fixture: {}",
                     setup.files[0].src.parent().unwrap().display()
                 );
+                if setup.root {
+                    println!("  Root: true");
+                }
                 for file in &setup.files {
                     println!("  File: {}", file.dest.display());
                 }
@@ -121,7 +124,7 @@ pub fn apply_fixtures(fixtures: Vec<Fixture>, revert: bool, no_backup: bool) {
                             if !backup_dir.exists() {
                                 std::fs::create_dir_all(&backup_dir).unwrap();
                             }
-                            backup_file(&file.dest, &backup_dir);
+                            backup_file(&backup_dir, &file.dest);
                         }
 
                         println!("Applying {:?}", file.dest);
@@ -141,12 +144,14 @@ pub fn apply_fixtures(fixtures: Vec<Fixture>, revert: bool, no_backup: bool) {
 }
 
 fn backup_file(backup_dir: &Path, file: &PathBuf) {
-    let backup_file = backup_dir.join(file.file_name().unwrap());
+    let backup_file = get_backup_filename(backup_dir, file);
+    std::fs::create_dir_all(backup_file.parent().unwrap()).unwrap();
+    eprintln!("Backing up {:?} to {:?}", file, backup_file);
     std::fs::copy(file, backup_file).unwrap();
 }
 
 fn restore_file(backup_dir: &Path, file: &PathBuf, root: bool) -> std::io::Result<()> {
-    let backup_file = backup_dir.join(file.file_name().unwrap());
+    let backup_file = get_backup_filename(backup_dir, file);
     if !backup_file.exists() {
         eprintln!("Backup file does not exist for {:?}", file);
         return Err(std::io::Error::new(
@@ -161,6 +166,10 @@ fn restore_file(backup_dir: &Path, file: &PathBuf, root: bool) -> std::io::Resul
         std::fs::copy(backup_file, file).unwrap();
     }
     Ok(())
+}
+
+fn get_backup_filename(backup_dir: &Path, file: &Path) -> PathBuf {
+    backup_dir.join(file.strip_prefix("/").unwrap())
 }
 
 fn write_root(file: &PathBuf, content: &str) {
@@ -265,7 +274,7 @@ mod tests {
         let file = test_dir.path().join("file.txt");
         std::fs::write(&file, "Hello, World!").unwrap();
 
-        let backup_filename = backup_dir.join("file.txt");
+        let backup_filename = backup_dir.join(file.strip_prefix("/").unwrap());
 
         assert!(!backup_filename.exists());
 
@@ -282,9 +291,10 @@ mod tests {
         std::fs::create_dir(&backup_dir).unwrap();
 
         let file = test_dir.path().join("file.txt");
-        std::fs::write(file, "Hello, World!").unwrap();
+        std::fs::write(file.clone(), "Hello, World!").unwrap();
 
-        let backup_filename = backup_dir.join("file.txt");
+        let backup_filename = backup_dir.join(file.strip_prefix("/").unwrap());
+        std::fs::create_dir_all(backup_filename.parent().unwrap()).unwrap();
         std::fs::write(backup_filename, "Hello, Backup!").unwrap();
 
         let restored_file = test_dir.path().join("file.txt");

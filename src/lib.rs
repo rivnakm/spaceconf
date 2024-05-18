@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use fixture::Fixture;
 use resolve_path::PathResolveExt;
@@ -99,13 +99,16 @@ pub fn check_fixtures(fixtures: Vec<Fixture>) {
     }
 }
 
-pub fn apply_fixtures(fixtures: Vec<Fixture>, revert: bool) {
+pub fn apply_fixtures(fixtures: Vec<Fixture>, revert: bool, no_backup: bool) {
+    let backup_dir = dirs::state_dir().unwrap().join("spaceconf");
     for fixture in fixtures {
         match &fixture {
             fixture::Fixture::Files(setup) => {
                 for file in &setup.files {
                     if revert {
-                        unimplemented!("store the original file content and restore it here");
+                        if let Err(e) = restore_file(&backup_dir, &file.dest, setup.root) {
+                            eprintln!("Failed to restore {:?}: {}", file.dest, e);
+                        }
                     } else {
                         let output = if file.raw {
                             std::fs::read_to_string(&file.src).unwrap()
@@ -114,25 +117,16 @@ pub fn apply_fixtures(fixtures: Vec<Fixture>, revert: bool) {
                             template::render(&input, &setup.secrets).unwrap()
                         };
 
+                        if !no_backup {
+                            if !backup_dir.exists() {
+                                std::fs::create_dir_all(&backup_dir).unwrap();
+                            }
+                            backup_file(&file.dest, &backup_dir);
+                        }
+
                         println!("Applying {:?}", file.dest);
                         if setup.root {
-                            #[cfg(not(target_os = "linux"))]
-                            {
-                                eprintln!("Root fixture is currently only supported on Linux");
-                                std::process::exit(1);
-                            }
-
-                            let temp_file = PathBuf::from(format!(
-                                "/tmp/spaceconf-{}.tmp",
-                                uuid::Uuid::new_v4()
-                            ));
-                            std::fs::write(&temp_file, output).unwrap();
-                            std::process::Command::new("sudo")
-                                .arg("cp")
-                                .arg(&temp_file)
-                                .arg(&file.dest)
-                                .status()
-                                .unwrap();
+                            write_root(&file.dest, &output);
                         } else {
                             std::fs::write(&file.dest, output).unwrap();
                         }
@@ -144,6 +138,46 @@ pub fn apply_fixtures(fixtures: Vec<Fixture>, revert: bool) {
             }
         }
     }
+}
+
+fn backup_file(backup_dir: &Path, file: &PathBuf) {
+    let backup_file = backup_dir.join(file.file_name().unwrap());
+    std::fs::copy(file, backup_file).unwrap();
+}
+
+fn restore_file(backup_dir: &Path, file: &PathBuf, root: bool) -> std::io::Result<()> {
+    let backup_file = backup_dir.join(file.file_name().unwrap());
+    if !backup_file.exists() {
+        eprintln!("Backup file does not exist for {:?}", file);
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Backup file does not exist",
+        ));
+    }
+
+    if root {
+        write_root(file, &std::fs::read_to_string(backup_file).unwrap());
+    } else {
+        std::fs::copy(backup_file, file).unwrap();
+    }
+    Ok(())
+}
+
+fn write_root(file: &PathBuf, content: &str) {
+    #[cfg(not(target_os = "linux"))]
+    {
+        eprintln!("Root fixture is currently only supported on Linux");
+        std::process::exit(1);
+    }
+
+    let temp_file = PathBuf::from(format!("/tmp/spaceconf-{}.tmp", uuid::Uuid::new_v4()));
+    std::fs::write(&temp_file, content).unwrap();
+    std::process::Command::new("sudo")
+        .arg("cp")
+        .arg(&temp_file)
+        .arg(file)
+        .status()
+        .unwrap();
 }
 
 #[cfg(test)]
@@ -212,12 +246,59 @@ mod tests {
             secrets: Default::default(),
         });
 
-        apply_fixtures(vec![fixture], false);
+        apply_fixtures(vec![fixture], false, true);
 
         assert!(dest_file.exists());
 
         let dest_content = std::fs::read_to_string(&dest_file).unwrap();
 
         assert_eq!(dest_content, file_content);
+    }
+
+    #[test]
+    fn test_backup_file() {
+        let test_dir = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let backup_dir = test_dir.path().join("backup");
+        std::fs::create_dir(&backup_dir).unwrap();
+
+        let file = test_dir.path().join("file.txt");
+        std::fs::write(&file, "Hello, World!").unwrap();
+
+        let backup_filename = backup_dir.join("file.txt");
+
+        assert!(!backup_filename.exists());
+
+        backup_file(&backup_dir, &file);
+
+        assert!(backup_filename.exists());
+    }
+
+    #[test]
+    fn test_restore_file() {
+        let test_dir = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let backup_dir = test_dir.path().join("backup");
+        std::fs::create_dir(&backup_dir).unwrap();
+
+        let file = test_dir.path().join("file.txt");
+        std::fs::write(file, "Hello, World!").unwrap();
+
+        let backup_filename = backup_dir.join("file.txt");
+        std::fs::write(backup_filename, "Hello, Backup!").unwrap();
+
+        let restored_file = test_dir.path().join("file.txt");
+
+        let pre_restore_content = std::fs::read_to_string(&restored_file).unwrap();
+
+        assert_eq!(pre_restore_content, "Hello, World!");
+
+        restore_file(&backup_dir, &restored_file, false).unwrap();
+
+        assert!(restored_file.exists());
+
+        let restored_content = std::fs::read_to_string(&restored_file).unwrap();
+
+        assert_eq!(restored_content, "Hello, Backup!");
     }
 }

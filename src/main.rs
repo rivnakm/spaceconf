@@ -35,13 +35,13 @@ struct CloneArgs {
 
 #[derive(Parser)]
 struct ApplyArgs {
-    /// Apply only the specified fixture
-    #[arg(short, long)]
-    fixture: Option<String>,
-
     /// Revert the specified configuration
     #[arg(short, long)]
     revert: bool,
+
+    /// Do not create a backup of the current configuration
+    #[arg(short, long)]
+    no_backup: bool,
 }
 
 fn main() {
@@ -75,7 +75,7 @@ fn main() {
             check_fixtures(fixtures);
         }
         Command::Apply(args) => {
-            apply_fixtures(fixtures, args.revert);
+            apply_fixtures(fixtures, args.revert, args.no_backup);
         }
         _ => unimplemented!(),
     }

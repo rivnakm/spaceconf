@@ -146,7 +146,6 @@ pub fn apply_fixtures(fixtures: Vec<Fixture>, revert: bool, no_backup: bool) {
 fn backup_file(backup_dir: &Path, file: &PathBuf) {
     let backup_file = get_backup_filename(backup_dir, file);
     std::fs::create_dir_all(backup_file.parent().unwrap()).unwrap();
-    eprintln!("Backing up {:?} to {:?}", file, backup_file);
     std::fs::copy(file, backup_file).unwrap();
 }
 

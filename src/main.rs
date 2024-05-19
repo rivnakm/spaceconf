@@ -45,6 +45,8 @@ struct ApplyArgs {
 }
 
 fn main() {
+    env_logger::init();
+
     let cli = Args::parse();
 
     let repo_dir = get_repo_dir();
@@ -74,9 +76,10 @@ fn main() {
         Command::Check => {
             check_fixtures(fixtures);
         }
-        Command::Apply(args) => {
-            apply_fixtures(fixtures, args.revert, args.no_backup);
-        }
+        Command::Apply(args) => match apply_fixtures(fixtures, args.revert, args.no_backup) {
+            Ok(_) => println!("Configuration applied successfully"),
+            Err(e) => eprintln!("Error: {}", e),
+        },
         _ => unimplemented!(),
     }
 }

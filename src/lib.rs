@@ -213,6 +213,14 @@ fn write_root(file: &PathBuf, content: &str) -> std::io::Result<()> {
             &temp_file.to_string_lossy()
         )
     })?;
+    if !file.parent().unwrap().exists() {
+        std::process::Command::new("sudo")
+            .arg("mkdir")
+            .arg("-p")
+            .arg(file.parent().unwrap())
+            .status()
+            .unwrap();
+    }
     std::process::Command::new("sudo")
         .arg("cp")
         .arg(&temp_file)

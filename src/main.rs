@@ -35,6 +35,9 @@ struct CloneArgs {
 
 #[derive(Parser)]
 struct ApplyArgs {
+    /// List of fixtures to apply
+    fixtures: Vec<String>,
+
     /// Revert the specified configuration
     #[arg(short, long)]
     revert: bool,
@@ -53,7 +56,7 @@ fn main() {
 
     if let Command::Clone(args) = &cli.command {
         if repo_dir.exists() {
-            eprintln!("Repository already exists, please run 'spaceconf sync' instead");
+            eprintln!("Repository already exists");
             std::process::exit(1);
         }
 
@@ -67,7 +70,12 @@ fn main() {
         std::process::exit(1);
     }
 
-    let fixtures = load_fixtures(get_repo_dir()).unwrap();
+    let fixture_names = match cli.command {
+        Command::Apply(ref args) => args.fixtures.clone(),
+        _ => vec![],
+    };
+
+    let fixtures = load_fixtures(get_repo_dir(), fixture_names).unwrap();
 
     match cli.command {
         Command::List => {

@@ -9,9 +9,9 @@ pub mod git;
 mod repo;
 mod template;
 
-pub fn load_fixtures(dir: PathBuf) -> std::io::Result<Vec<Fixture>> {
+pub fn load_fixtures(dir: PathBuf, names: Vec<String>) -> std::io::Result<Vec<Fixture>> {
     let dir_entries = std::fs::read_dir(dir)?;
-    let fixture_dirs: Vec<PathBuf> = dir_entries
+    let fixture_dirs = dir_entries
         .filter_map(|entry| entry.ok())
         .filter(|entry| entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
         .filter(|entry| {
@@ -21,10 +21,16 @@ pub fn load_fixtures(dir: PathBuf) -> std::io::Result<Vec<Fixture>> {
                 .any(|entry| entry.file_name() == "fixture.json")
         })
         .map(|entry| entry.path())
-        .collect();
+        .filter(|path| {
+            if names.is_empty() {
+                return true;
+            }
+
+            let fixture_name = path.file_name().unwrap().to_string_lossy();
+            names.contains(&fixture_name.to_string())
+        });
 
     let fixtures = fixture_dirs
-        .into_iter()
         .map(|fixture_dir| {
             let fixture_file = fixture_dir.join("fixture.json");
             let secret_file = fixture_dir.join("secrets.json");
@@ -258,7 +264,7 @@ mod tests {
         });
         std::fs::write(fixture_file, serde_json::to_string(&fixture).unwrap()).unwrap();
 
-        let fixtures = load_fixtures(test_dir.path().to_path_buf()).unwrap();
+        let fixtures = load_fixtures(test_dir.path().to_path_buf(), vec![]).unwrap();
 
         assert_eq!(fixtures.len(), 1);
         assert!(matches!(fixtures[0], Fixture::Files(_)));

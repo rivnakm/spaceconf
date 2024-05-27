@@ -172,6 +172,10 @@ pub fn apply_fixtures(
 }
 
 fn backup_file(backup_dir: &Path, file: &PathBuf) {
+    if !file.exists() {
+        return;
+    }
+
     let backup_file = get_backup_filename(backup_dir, file);
     std::fs::create_dir_all(backup_file.parent().unwrap()).unwrap();
     std::fs::copy(file, backup_file).unwrap();

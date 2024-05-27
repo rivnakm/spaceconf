@@ -1,8 +1,10 @@
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use fixture::Fixture;
 use log::error;
 use resolve_path::PathResolveExt;
+use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 mod fixture;
 pub mod git;
@@ -115,10 +117,12 @@ pub fn apply_fixtures(
     no_backup: bool,
 ) -> std::io::Result<()> {
     let backup_dir = dirs::state_dir().unwrap().join("spaceconf");
+    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     for fixture in fixtures {
         match &fixture {
             fixture::Fixture::Files(setup) => {
                 for file in &setup.files {
+                    stdout.set_color(ColorSpec::new().set_fg(Some(termcolor::Color::White)))?;
                     if revert {
                         if let Err(e) = restore_file(&backup_dir, &file.dest, setup.root) {
                             eprintln!("Failed to restore {:?}: {}", file.dest, e);
@@ -141,6 +145,18 @@ pub fn apply_fixtures(
                             })?;
                             template::render(&input, &setup.secrets).unwrap()
                         };
+
+                        if check_content(&output, &file.dest) {
+                            stdout.set_color(
+                                ColorSpec::new().set_fg(Some(termcolor::Color::Green)),
+                            )?;
+                            writeln!(&mut stdout, "{} is up to date", file.dest.to_string_lossy())
+                                .unwrap();
+                            stdout.set_color(
+                                ColorSpec::new().set_fg(Some(termcolor::Color::White)),
+                            )?;
+                            continue;
+                        }
 
                         if !no_backup {
                             if !backup_dir.exists() {
@@ -175,6 +191,16 @@ pub fn apply_fixtures(
     }
 
     Ok(())
+}
+
+fn check_content(content: &str, output: &PathBuf) -> bool {
+    if !output.exists() {
+        return false;
+    }
+
+    let existing_content = std::fs::read_to_string(output).unwrap();
+
+    content == existing_content
 }
 
 fn backup_file(backup_dir: &Path, file: &PathBuf) {

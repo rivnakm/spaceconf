@@ -16,7 +16,7 @@ impl Default for Fixture {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
 pub struct FilesSetup {
     #[serde(default)]
     pub files: Vec<File>,
@@ -28,7 +28,7 @@ pub struct FilesSetup {
     pub secrets: HashMap<String, String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct File {
     pub src: PathBuf,
     pub dest: PathBuf,
@@ -37,7 +37,7 @@ pub struct File {
     pub raw: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct RepositorySetup {
     pub repository: String,
     pub reference: Reference,
@@ -51,4 +51,58 @@ pub enum Reference {
     Branch(String),
     Tag(String),
     Commit(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_deserialize_files_setup() {
+        let input = r#"{
+            "type": "files",
+            "files": [
+                {
+                    "src": "src",
+                    "dest": "dest"
+                }
+            ],
+            "root": true
+        }"#;
+
+        let expected = FilesSetup {
+            files: vec![File {
+                src: PathBuf::from("src"),
+                dest: PathBuf::from("dest"),
+                raw: false,
+            }],
+            root: true,
+            secrets: HashMap::new(),
+        };
+
+        let actual: FilesSetup = serde_json::from_str(input).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_deserialize_repository_setup() {
+        let input = r#"{
+            "type": "repository",
+            "repository": "https://github.com/torvals/linux.git",
+            "reference": {
+                "type": "branch",
+                "value": "master"
+            },
+            "path": "linux"
+        }"#;
+
+        let expected = RepositorySetup {
+            repository: "https://github.com/torvals/linux.git".to_string(),
+            reference: Reference::Branch("master".to_string()),
+            path: PathBuf::from("linux"),
+        };
+
+        let actual: RepositorySetup = serde_json::from_str(input).unwrap();
+        assert_eq!(actual, expected);
+    }
 }

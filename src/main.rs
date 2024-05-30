@@ -93,6 +93,5 @@ fn main() {
 }
 
 fn get_repo_dir() -> PathBuf {
-    let config_dir = dirs::config_dir().unwrap();
-    config_dir.join("spaceconf")
+    dirs::home_dir().unwrap().join(".spaceconf")
 }

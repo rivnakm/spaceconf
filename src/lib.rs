@@ -1,9 +1,8 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use fixture::Fixture;
+use fixture::{Fixture, FixtureType};
 use log::error;
-use resolve_path::PathResolveExt;
 use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 mod fixture;
@@ -38,74 +37,60 @@ pub fn load_fixtures(dir: PathBuf, names: Vec<String>) -> std::io::Result<Vec<Fi
             let secret_file = fixture_dir.join("secrets.json");
             let fixture = std::fs::read_to_string(fixture_file).unwrap();
             let mut fixture: Fixture = serde_json::from_str(&fixture).unwrap();
-            match &mut fixture {
-                fixture::Fixture::Files(ref mut setup) => {
-                    for file in &mut setup.files {
-                        file.src = fixture_dir.join(&file.src);
-                        file.dest = file.dest.resolve().to_path_buf();
-                    }
-                    if secret_file.exists() {
-                        let secrets = std::fs::read_to_string(secret_file).unwrap();
-                        setup.secrets = serde_json::from_str(&secrets).unwrap();
-                    }
+
+            // resolve relative paths to absolute paths and load secrets
+            if let FixtureType::Files(ref mut setup) = &mut fixture.fixture_type {
+                for file in &mut setup.files {
+                    file.src = file.src.clone().expand(&fixture_dir);
                 }
-                fixture::Fixture::Repository(ref mut setup) => {
-                    setup.path = setup.path.resolve().to_path_buf();
+                if secret_file.exists() {
+                    let secrets = std::fs::read_to_string(secret_file).unwrap();
+                    setup.secrets = serde_json::from_str(&secrets).unwrap();
                 }
             }
+
+            if fixture.name.is_empty() {
+                fixture.name = fixture_dir
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
+            }
+
+            let _ = fixture.validate().inspect_err(|e| {
+                error!("Invalid fixture: {}", e);
+                std::process::exit(1);
+            });
+
             fixture
         })
         .collect();
+
+    // TODO: process fixtures
+    // assign the name if it's not present
+    // validate the fixture
 
     Ok(fixtures)
 }
 
 pub fn list_fixtures(fixtures: Vec<Fixture>) {
     for fixture in fixtures {
-        match &fixture {
-            fixture::Fixture::Files(setup) => {
-                println!(
-                    "Fixture: {}",
-                    setup.files[0].src.parent().unwrap().display()
-                );
+        match fixture.fixture_type {
+            FixtureType::Files(setup) => {
+                println!("Fixture: {}", fixture.name);
                 if setup.root {
                     println!("  Root: true");
                 }
-                for file in &setup.files {
-                    println!("  File: {}", file.dest.display());
+                for file in setup.files {
+                    if let Some(dest) = file.dest.resolve() {
+                        println!("  File: {}", dest.display());
+                    }
                 }
             }
-            fixture::Fixture::Repository(setup) => {
+            FixtureType::Repository(setup) => {
                 println!("Fixture: {}", setup.repository);
                 println!("  Reference: {:?}", setup.reference);
                 println!("  Path: {}", setup.path.display());
-            }
-        }
-    }
-}
-
-pub fn check_fixtures(fixtures: Vec<Fixture>) {
-    for fixture in fixtures {
-        match &fixture {
-            fixture::Fixture::Files(setup) => {
-                for file in &setup.files {
-                    if !file.dest.exists() {
-                        println!("{:?} does not exist", file.dest);
-                        continue;
-                    }
-
-                    let src_time = file.src.metadata().unwrap().modified().unwrap();
-                    let dest_time = file.dest.metadata().unwrap().modified().unwrap();
-
-                    if src_time <= dest_time {
-                        println!("{:?} is up to date", file.dest);
-                    } else {
-                        println!("{:?} is NOT up to date", file.dest);
-                    }
-                }
-            }
-            fixture::Fixture::Repository(_) => {
-                unimplemented!("'check' command is not supported for repository fixtures");
             }
         }
     }
@@ -119,38 +104,39 @@ pub fn apply_fixtures(
     let backup_dir = dirs::state_dir().unwrap().join("spaceconf");
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     for fixture in fixtures {
-        match &fixture {
-            fixture::Fixture::Files(setup) => {
-                for file in &setup.files {
+        match fixture.fixture_type {
+            FixtureType::Files(setup) => {
+                for file in setup.files {
+                    let Some(src) = file.src.resolve() else {
+                        continue;
+                    };
+                    let Some(dest) = file.dest.resolve() else {
+                        continue;
+                    };
+
                     stdout.set_color(ColorSpec::new().set_fg(Some(termcolor::Color::White)))?;
                     if revert {
-                        if let Err(e) = restore_file(&backup_dir, &file.dest, setup.root) {
-                            eprintln!("Failed to restore {:?}: {}", file.dest, e);
+                        if let Err(e) = restore_file(&backup_dir, &dest, setup.root) {
+                            eprintln!("Failed to restore {:?}: {}", dest, e);
                             return Err(e);
                         }
                     } else {
                         let output = if file.raw {
-                            std::fs::read_to_string(&file.src).inspect_err(|_| {
-                                error!(
-                                    "failed to read source file: {}",
-                                    &file.src.to_string_lossy()
-                                )
+                            std::fs::read_to_string(&src).inspect_err(|_| {
+                                error!("failed to read source file: {}", &src.to_string_lossy())
                             })?
                         } else {
-                            let input = std::fs::read_to_string(&file.src).inspect_err(|_| {
-                                error!(
-                                    "failed to read source file: {}",
-                                    &file.src.to_string_lossy()
-                                )
+                            let input = std::fs::read_to_string(&src).inspect_err(|_| {
+                                error!("failed to read source file: {}", &src.to_string_lossy())
                             })?;
                             template::render(&input, &setup.secrets).unwrap()
                         };
 
-                        if check_content(&output, &file.dest) {
+                        if check_content(&output, &dest) {
                             stdout.set_color(
                                 ColorSpec::new().set_fg(Some(termcolor::Color::Green)),
                             )?;
-                            writeln!(&mut stdout, "{} is up to date", file.dest.to_string_lossy())
+                            writeln!(&mut stdout, "{} is up to date", dest.to_string_lossy())
                                 .unwrap();
                             stdout.set_color(
                                 ColorSpec::new().set_fg(Some(termcolor::Color::White)),
@@ -167,24 +153,24 @@ pub fn apply_fixtures(
                                     )
                                 })?;
                             }
-                            backup_file(&backup_dir, &file.dest);
+                            backup_file(&backup_dir, &dest);
                         }
 
                         if setup.root {
-                            write_root(&file.dest, &output)?;
+                            write_root(&dest, &output)?;
                         } else {
-                            std::fs::write(&file.dest, output).inspect_err(|_| {
+                            std::fs::write(&dest, output).inspect_err(|_| {
                                 error!(
                                     "failed to read destination file: {}",
-                                    &file.dest.to_string_lossy()
+                                    &dest.to_string_lossy()
                                 )
                             })?;
                         }
-                        println!("Applying {:?}", file.dest);
+                        println!("Applying {:?}", dest);
                     }
                 }
             }
-            fixture::Fixture::Repository(setup) => {
+            FixtureType::Repository(setup) => {
                 repo::apply(setup.clone());
             }
         }
@@ -269,7 +255,7 @@ fn write_root(file: &PathBuf, content: &str) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixture::{self, Fixture};
+    use crate::fixture::{self, FileDefinition, Fixture};
 
     #[test]
     fn test_get_fixtures() {
@@ -279,30 +265,42 @@ mod tests {
         std::fs::create_dir(&fixture_dir).unwrap();
 
         let fixture_file = fixture_dir.join("fixture.json");
-        let fixture = Fixture::Files(fixture::FilesSetup {
-            files: vec![fixture::File {
-                src: "source.conf".into(),
-                dest: "/etc/dest.conf".into(),
-                raw: false,
-            }],
-            root: false,
-            secrets: Default::default(),
-        });
+        let fixture = Fixture {
+            name: "test-fixture".into(),
+            include_for: None,
+            exclude_for: None,
+            fixture_type: FixtureType::Files(fixture::FilesSetup {
+                files: vec![fixture::File {
+                    src: FileDefinition::Single("source.conf".into()),
+                    dest: FileDefinition::Single("/etc/dest.conf".into()),
+                    raw: false,
+                    optional: false,
+                }],
+                root: false,
+                secrets: Default::default(),
+            }),
+        };
         std::fs::write(fixture_file, serde_json::to_string(&fixture).unwrap()).unwrap();
 
         let fixtures = load_fixtures(test_dir.path().to_path_buf(), vec![]).unwrap();
 
         assert_eq!(fixtures.len(), 1);
-        assert!(matches!(fixtures[0], Fixture::Files(_)));
+        assert!(matches!(fixtures[0].fixture_type, FixtureType::Files(_)));
 
-        let setup = match &fixtures[0] {
-            Fixture::Files(setup) => setup,
+        let setup = match &fixtures[0].fixture_type {
+            FixtureType::Files(setup) => setup,
             _ => unreachable!(),
         };
 
         assert_eq!(setup.files.len(), 1);
-        assert_eq!(setup.files[0].src, fixture_dir.join("source.conf"));
-        assert_eq!(setup.files[0].dest, PathBuf::from("/etc/dest.conf"));
+        assert_eq!(
+            setup.files[0].src,
+            FileDefinition::Single(fixture_dir.join("source.conf"))
+        );
+        assert_eq!(
+            setup.files[0].dest,
+            FileDefinition::Single(PathBuf::from("/etc/dest.conf"))
+        );
         assert!(!setup.files[0].raw);
 
         assert!(!setup.root);
@@ -322,15 +320,21 @@ mod tests {
 
         assert!(!dest_file.exists());
 
-        let fixture = Fixture::Files(fixture::FilesSetup {
-            files: vec![fixture::File {
-                src: source_file.clone(),
-                dest: dest_file.clone(),
-                raw: true,
-            }],
-            root: false,
-            secrets: Default::default(),
-        });
+        let fixture = Fixture {
+            name: "test-fixture".into(),
+            include_for: None,
+            exclude_for: None,
+            fixture_type: FixtureType::Files(fixture::FilesSetup {
+                files: vec![fixture::File {
+                    src: FileDefinition::Single(source_file.clone()),
+                    dest: FileDefinition::Single(dest_file.clone()),
+                    raw: true,
+                    optional: false,
+                }],
+                root: false,
+                secrets: Default::default(),
+            }),
+        };
 
         apply_fixtures(vec![fixture], false, true).unwrap();
 

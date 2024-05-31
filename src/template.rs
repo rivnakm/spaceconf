@@ -10,16 +10,10 @@ fn default_context() -> Context {
         context.insert("hostname", &hostname.to_string_lossy());
     }
 
-    // Arch
-    #[cfg(target_arch = "x86_64")]
-    context.insert("arch", "x86_64");
-
-    #[cfg(target_arch = "aarch64")]
-    context.insert("arch", "aarch64");
+    context.insert("arch", std::env::consts::ARCH);
 
     // OS
-    #[cfg(target_os = "linux")]
-    context.insert("os", "linux");
+    context.insert("os", std::env::consts::OS);
 
     // Misc info
     context.insert("nproc", &num_cpus::get());

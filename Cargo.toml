@@ -8,6 +8,7 @@ chrono = { version = "0.4.38", features = ["serde"] }
 clap = { version = "4.5.4", features = ["derive"] }
 dirs = "5.0.1"
 env_logger = "0.11.3"
+globset = "0.4.14"
 hostname = "0.4.0"
 log = "0.4.21"
 num_cpus = "1.16.0"

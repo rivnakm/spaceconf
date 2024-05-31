@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 use spaceconf::git;
-use spaceconf::{apply_fixtures, check_fixtures, list_fixtures, load_fixtures};
+use spaceconf::list_fixtures;
+use spaceconf::ops::apply::apply_fixtures;
+use spaceconf::ops::load::load_fixtures;
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -22,9 +24,6 @@ enum Command {
 
     /// List all available fixtures
     List,
-
-    /// Check if local configuration is up-to-date
-    Check,
 }
 
 #[derive(Parser)]
@@ -60,7 +59,7 @@ fn main() {
             std::process::exit(1);
         }
 
-        println!("Cloning repository...");
+        println!("Cloning repository to ~/.spaceconf ...");
         git::clone(&args.repository, &repo_dir, None);
         std::process::exit(0);
     }
@@ -80,9 +79,6 @@ fn main() {
     match cli.command {
         Command::List => {
             list_fixtures(fixtures);
-        }
-        Command::Check => {
-            check_fixtures(fixtures);
         }
         Command::Apply(args) => match apply_fixtures(fixtures, args.revert, args.no_backup) {
             Ok(_) => println!("Configuration applied successfully"),

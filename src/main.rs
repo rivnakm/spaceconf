@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 use spaceconf::git;
-use spaceconf::{apply_fixtures, list_fixtures, load_fixtures};
+use spaceconf::list_fixtures;
+use spaceconf::ops::apply::apply_fixtures;
+use spaceconf::ops::load::load_fixtures;
 
 #[derive(Parser)]
 #[command(version, about)]

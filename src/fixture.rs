@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use resolve_path::PathResolveExt;
 use serde::{Deserialize, Serialize};
 
 type Specifier = String;
@@ -53,7 +54,19 @@ impl Fixture {
     }
 
     pub fn skip(&self) -> bool {
-        todo!();
+        if let Some(exclude_for) = &self.exclude_for {
+            if matches_spec(exclude_for) {
+                return true;
+            }
+        }
+
+        if let Some(include_for) = &self.include_for {
+            if !matches_spec(include_for) {
+                return true;
+            }
+        }
+
+        false
     }
 }
 
@@ -105,9 +118,15 @@ pub enum FileDefinition {
 impl FileDefinition {
     pub fn resolve(self) -> Option<PathBuf> {
         match self {
-            FileDefinition::Single(path) => Some(path),
+            FileDefinition::Single(path) => Some(path.resolve().to_path_buf()),
             FileDefinition::Multiple(map) => {
-                todo!();
+                if let Some(spec) = choose_spec(&map.keys().cloned().collect::<Vec<_>>()) {
+                    map.get(&spec)
+                        .cloned()
+                        .map(|path| path.resolve().to_path_buf())
+                } else {
+                    None
+                }
             }
         }
     }
@@ -157,6 +176,11 @@ fn choose_spec(specs: &[Specifier]) -> Option<Specifier> {
     // OS match
     if specs.contains(&OS.to_string()) {
         return Some(OS.to_string());
+    }
+
+    // ARCH match
+    if specs.contains(&ARCH.to_string()) {
+        return Some(ARCH.to_string());
     }
 
     // Default case
@@ -314,12 +338,27 @@ mod tests {
     fn test_choose_spec_os_arch() {
         use std::env::consts::{ARCH, OS};
         let specs = vec![
+            format!("{}", OS),
             format!("{}-x86_64", OS),
             format!("{}-aarch64", OS),
             format!("{}-arm", OS),
         ];
 
         assert_eq!(choose_spec(&specs), Some(format!("{}-{}", OS, ARCH)));
+    }
+
+    #[test]
+    fn test_choose_spec_arch() {
+        let specs = vec![
+            "x86_64".to_string(),
+            "aarch64".to_string(),
+            "arm".to_string(),
+        ];
+
+        assert_eq!(
+            choose_spec(&specs),
+            Some(std::env::consts::ARCH.to_string())
+        );
     }
 
     #[test]

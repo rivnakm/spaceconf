@@ -1,15 +1,18 @@
+use resolve_path::PathResolveExt;
+
 use crate::{fixture::RepositorySetup, git};
 
 pub fn apply(setup: RepositorySetup) {
-    if setup.path.exists() && !setup.path.join(".git").exists() {
+    let path = setup.path.resolve().to_path_buf();
+    if path.exists() && !path.join(".git").exists() {
         panic!("{} is not a git repository", setup.path.display());
     }
 
-    if !setup.path.exists() {
-        git::clone(&setup.repository, &setup.path, Some(setup.reference))
+    if !path.exists() {
+        git::clone(&setup.repository, &path, Some(setup.reference))
     }
 
-    git::pull(&setup.path);
+    git::pull(&path);
 }
 
 #[cfg(test)]

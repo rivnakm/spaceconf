@@ -1,5 +1,7 @@
 use std::{
+    collections::HashMap,
     io::Write,
+    os::unix::fs::{MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
 };
 
@@ -7,7 +9,7 @@ use log::error;
 use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::{
-    fixture::{Fixture, FixtureType},
+    fixture::{File, FilesSetup, Fixture, FixtureType},
     repo, template,
 };
 
@@ -17,7 +19,6 @@ pub fn apply_fixtures(
     no_backup: bool,
 ) -> std::io::Result<()> {
     let backup_dir = dirs::state_dir().unwrap().join("spaceconf");
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     for fixture in fixtures {
         if fixture.skip() {
             continue;
@@ -25,68 +26,15 @@ pub fn apply_fixtures(
 
         match fixture.fixture_type {
             FixtureType::Files(setup) => {
-                for file in setup.files {
-                    let Some(src) = file.src.resolve() else {
-                        continue;
-                    };
-                    let Some(dest) = file.dest.resolve() else {
-                        continue;
-                    };
-
-                    stdout.set_color(ColorSpec::new().set_fg(Some(termcolor::Color::White)))?;
-                    if revert {
-                        if let Err(e) = restore_file(&backup_dir, &dest, setup.root) {
-                            eprintln!("Failed to restore {:?}: {}", dest, e);
-                            return Err(e);
-                        }
-                    } else {
-                        let output = if file.raw {
-                            std::fs::read_to_string(&src).inspect_err(|_| {
-                                error!("failed to read source file: {}", &src.to_string_lossy())
-                            })?
-                        } else {
-                            let input = std::fs::read_to_string(&src).inspect_err(|_| {
-                                error!("failed to read source file: {}", &src.to_string_lossy())
-                            })?;
-                            template::render(&input, &setup.secrets).unwrap()
-                        };
-
-                        if check_content(&output, &dest) {
-                            stdout.set_color(
-                                ColorSpec::new().set_fg(Some(termcolor::Color::Green)),
-                            )?;
-                            writeln!(&mut stdout, "{} is up to date", dest.to_string_lossy())
-                                .unwrap();
-                            stdout.set_color(
-                                ColorSpec::new().set_fg(Some(termcolor::Color::White)),
-                            )?;
-                            continue;
-                        }
-
-                        if !no_backup {
-                            if !backup_dir.exists() {
-                                std::fs::create_dir_all(&backup_dir).inspect_err(|_| {
-                                    error!(
-                                        "failed to create parent directory(s): {}",
-                                        &backup_dir.to_string_lossy()
-                                    )
-                                })?;
-                            }
-                            backup_file(&backup_dir, &dest);
-                        }
-
-                        if setup.root {
-                            write_root(&dest, &output)?;
-                        } else {
-                            std::fs::write(&dest, output).inspect_err(|_| {
-                                error!(
-                                    "failed to read destination file: {}",
-                                    &dest.to_string_lossy()
-                                )
-                            })?;
-                        }
-                        println!("Applying {:?}", dest);
-                    }
+                for file in setup.clone().files {
+                    apply_file(
+                        &file,
+                        &backup_dir,
+                        setup.root,
+                        &setup.secrets,
+                        revert,
+                        no_backup,
+                    )?;
                 }
             }
             FixtureType::Repository(setup) => {
@@ -96,6 +44,93 @@ pub fn apply_fixtures(
     }
 
     Ok(())
+}
+
+fn apply_file(
+    file: &File,
+    backup_dir: &Path,
+    root: bool,
+    secrets: &HashMap<String, String>,
+    revert: bool,
+    no_backup: bool,
+) -> std::io::Result<()> {
+    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+    let Some(src) = file.src.clone().resolve() else {
+        return Ok(());
+    };
+    let Some(dest) = file.dest.clone().resolve() else {
+        return Ok(());
+    };
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(termcolor::Color::White)))?;
+    if revert {
+        restore_file(backup_dir, &dest, root).inspect_err(|e| {
+            eprintln!("Failed to restore {:?}: {}", dest, e);
+        })
+    } else {
+        let output = if file.raw {
+            std::fs::read_to_string(&src)
+                .inspect_err(|_| error!("failed to read source file: {}", &src.to_string_lossy()))?
+        } else {
+            let input = std::fs::read_to_string(&src).inspect_err(|_| {
+                error!("failed to read source file: {}", &src.to_string_lossy())
+            })?;
+            template::render(&input, secrets).unwrap()
+        };
+
+        if check_content(&output, &dest) {
+            stdout.set_color(ColorSpec::new().set_fg(Some(termcolor::Color::Green)))?;
+            writeln!(stdout, "{} is up to date", dest.to_string_lossy()).unwrap();
+            stdout.set_color(ColorSpec::new().set_fg(Some(termcolor::Color::White)))?;
+            return Ok(());
+        }
+
+        if !no_backup {
+            if !backup_dir.exists() {
+                std::fs::create_dir_all(backup_dir).inspect_err(|_| {
+                    error!(
+                        "failed to create parent directory(s): {}",
+                        &backup_dir.to_string_lossy()
+                    )
+                })?;
+            }
+            backup_file(backup_dir, &dest);
+        }
+
+        let mode = src.metadata().unwrap().mode();
+        if root {
+            write_root(&dest, &output, mode)?;
+        } else {
+            let mut open_options = std::fs::OpenOptions::new();
+            open_options.mode(mode);
+
+            std::fs::create_dir_all(dest.parent().unwrap()).inspect_err(|_| {
+                error!(
+                    "failed to create parent directory(s): {}",
+                    &dest.to_string_lossy()
+                )
+            })?;
+            let mut file = open_options
+                .write(true)
+                .truncate(true)
+                .create(true)
+                .open(&dest)
+                .inspect_err(|_| {
+                    error!(
+                        "failed to open destination file: {}",
+                        &dest.to_string_lossy()
+                    )
+                })?;
+            file.write_all(output.as_bytes()).inspect_err(|_| {
+                error!(
+                    "failed to write to destination file: {}",
+                    &dest.to_string_lossy()
+                )
+            })?;
+        }
+        println!("Applying {:?}", dest);
+        Ok(())
+    }
 }
 
 fn check_content(content: &str, output: &PathBuf) -> bool {
@@ -128,8 +163,10 @@ fn restore_file(backup_dir: &Path, file: &PathBuf, root: bool) -> std::io::Resul
         ));
     }
 
+    let mode = backup_file.metadata().unwrap().mode();
+
     if root {
-        write_root(file, &std::fs::read_to_string(backup_file).unwrap())?;
+        write_root(file, &std::fs::read_to_string(backup_file).unwrap(), mode)?;
     } else {
         std::fs::copy(backup_file, file).unwrap();
     }
@@ -140,7 +177,7 @@ fn get_backup_filename(backup_dir: &Path, file: &Path) -> PathBuf {
     backup_dir.join(file.strip_prefix("/").unwrap())
 }
 
-fn write_root(file: &PathBuf, content: &str) -> std::io::Result<()> {
+fn write_root(file: &PathBuf, content: &str, mode: u32) -> std::io::Result<()> {
     #[cfg(not(target_os = "linux"))]
     {
         eprintln!("Root fixture is currently only supported on Linux");
@@ -168,6 +205,14 @@ fn write_root(file: &PathBuf, content: &str) -> std::io::Result<()> {
         .arg(file)
         .status()
         .unwrap();
+
+    std::process::Command::new("sudo")
+        .arg("chmod")
+        .arg(format!("{:o}", mode))
+        .arg(file)
+        .status()
+        .unwrap();
+
     Ok(())
 }
 
@@ -322,6 +367,60 @@ mod tests {
         apply_fixtures(vec![fixture], false, true).unwrap();
 
         assert!(!dest_file.exists());
+    }
+
+    #[test]
+    fn test_apply_missing_parent_dirs() {
+        let test_dir = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let src_path = test_dir.path().join("source.conf");
+        let dest_path = test_dir.path().join("nested/dest.conf");
+
+        let file = File {
+            src: FileDefinition::Single(src_path.clone()),
+            dest: FileDefinition::Single(dest_path.clone()),
+            raw: false,
+            optional: false,
+        };
+
+        std::fs::write(&src_path, "Hello, World!").unwrap();
+
+        assert!(!dest_path.parent().unwrap().exists());
+        assert!(!dest_path.exists());
+
+        apply_file(&file, test_dir.path(), false, &HashMap::new(), false, true).unwrap();
+
+        assert!(dest_path.parent().unwrap().exists());
+        assert!(dest_path.exists());
+    }
+
+    #[test]
+    fn test_apply_preserves_mode() {
+        let test_dir = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let src_path = test_dir.path().join("source.conf");
+        let dest_path = test_dir.path().join("dest.conf");
+
+        let file = File {
+            src: FileDefinition::Single(src_path.clone()),
+            dest: FileDefinition::Single(dest_path.clone()),
+            raw: false,
+            optional: false,
+        };
+
+        let mode = 0o600;
+
+        let mut open_options = std::fs::OpenOptions::new();
+        open_options.mode(mode);
+        open_options.write(true);
+        open_options.create(true);
+        let mut src_file = open_options.open(&src_path).unwrap();
+        src_file.write_all(b"Hello, World!").unwrap();
+
+        apply_file(&file, test_dir.path(), false, &HashMap::new(), false, true).unwrap();
+
+        let dest_metadata = std::fs::metadata(&dest_path).unwrap();
+        assert_eq!(dest_metadata.mode() & 0o777, mode);
     }
 
     #[test]

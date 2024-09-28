@@ -9,7 +9,7 @@ use log::error;
 use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::{
-    fixture::{File, FilesSetup, Fixture, FixtureType},
+    fixture::{File, Fixture, FixtureType},
     repo, template,
 };
 
@@ -208,7 +208,7 @@ fn write_root(file: &PathBuf, content: &str, mode: u32) -> std::io::Result<()> {
 
     std::process::Command::new("sudo")
         .arg("chmod")
-        .arg(format!("{:o}", mode))
+        .arg(format!("{:o}", mode & 0o1777))
         .arg(file)
         .status()
         .unwrap();

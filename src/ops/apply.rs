@@ -134,6 +134,10 @@ fn apply_file(
 }
 
 fn check_mode(src: &Path, dest: &Path) -> bool {
+    if !dest.exists() {
+        return false;
+    }
+
     let Ok(src_metadata) = src.metadata() else {
         return false;
     };

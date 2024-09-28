@@ -78,7 +78,7 @@ fn apply_file(
             template::render(&input, secrets).unwrap()
         };
 
-        if check_content(&output, &dest) {
+        if check_content(&output, &dest) && check_mode(&src, &dest) {
             stdout.set_color(ColorSpec::new().set_fg(Some(termcolor::Color::Green)))?;
             writeln!(stdout, "{} is up to date", dest.to_string_lossy()).unwrap();
             stdout.set_color(ColorSpec::new().set_fg(Some(termcolor::Color::White)))?;
@@ -131,6 +131,17 @@ fn apply_file(
         println!("Applying {:?}", dest);
         Ok(())
     }
+}
+
+fn check_mode(src: &Path, dest: &Path) -> bool {
+    let Ok(src_metadata) = src.metadata() else {
+        return false;
+    };
+    let Ok(dest_metadata) = dest.metadata() else {
+        return false;
+    };
+
+    src_metadata.mode() & 0x1777 == dest_metadata.mode() & 0x1777
 }
 
 fn check_content(content: &str, output: &PathBuf) -> bool {

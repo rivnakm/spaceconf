@@ -1,0 +1,17 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "extends": ["config:base"],
+    "addLabels": ["dependencies"],
+    "packageRules": [
+        {
+            "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+            "automerge": true
+        },
+        {
+            "matchUpdateTypes": ["major"],
+            "automerge": false
+        }
+    ],
+    "schedule": ["after 5pm on the first day of the month"],
+    "timezone": "America/New_York"
+}

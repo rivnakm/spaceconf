@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 use spaceconf::git;
 use spaceconf::list_fixtures;
 use spaceconf::ops::apply::apply_fixtures;
+use spaceconf::ops::diff::diff_fixtures;
 use spaceconf::ops::load::load_fixtures;
 
 #[derive(Parser)]
@@ -24,6 +25,9 @@ enum Command {
 
     /// List all available fixtures
     List,
+
+    /// Show differences between the current configuration and the fixtures
+    Diff,
 }
 
 #[derive(Parser)]
@@ -84,6 +88,7 @@ fn main() {
             Ok(_) => println!("Configuration applied successfully"),
             Err(e) => eprintln!("Error: {}", e),
         },
+        Command::Diff => diff_fixtures(fixtures),
         _ => unimplemented!(),
     }
 }

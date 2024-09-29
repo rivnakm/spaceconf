@@ -1,0 +1,18 @@
+name: Check label action
+on:
+    pull_request:
+        types:
+            - opened
+            - synchronize
+            - labeled
+            - unlabeled
+
+jobs:
+    check-label:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Check for category label
+              uses: agilepathway/label-checker@v1.6.51
+              with:
+                  any_of: bug,dependencies,documentation,enhancement,tech-debt,tests
+                  repo_token: ${{ secrets.GITHUB_TOKEN }}

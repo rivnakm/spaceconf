@@ -12,7 +12,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Check for category label
-              uses: agilepathway/label-checker@v1.6.51
+              uses: agilepathway/label-checker@v1.6.55
               with:
                   any_of: bug,dependencies,documentation,enhancement,tech-debt,tests
                   repo_token: ${{ secrets.GITHUB_TOKEN }}

@@ -3,6 +3,7 @@ import sys
 import toml
 
 tag_ver = sys.argv[1]
+tag_ver = tag_ver.replace("v", "")
 
 with open("Cargo.toml", "r") as f:
     cargo_toml = toml.load(f)

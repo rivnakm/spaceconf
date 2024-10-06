@@ -16,5 +16,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install python-semver
+        run: |
+          apt update
+          apt install -y python3-semver
+
       - name: Verify incremented version
         run: python ./scripts/check_version.py $(git describe --tags --abbrev=0)

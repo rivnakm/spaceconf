@@ -18,8 +18,8 @@ jobs:
 
       - name: Install python-semver
         run: |
-          apt update
-          apt install -y python3-semver
+          sudo apt update
+          sudo apt install -y python3-semver
 
       - name: Verify incremented version
         run: python ./scripts/check_version.py $(git describe --tags --abbrev=0)

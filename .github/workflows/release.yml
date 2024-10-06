@@ -17,6 +17,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install python modules
+        run: |
+          sudo apt update
+          sudo apt install -y python3-toml
+
       - name: Get Version
         id: version
         run: echo "version=$(python ./scripts/get_version.py)" >> "$GITHUB_OUTPUT"

@@ -16,10 +16,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install python-semver
+      - name: Install python modules
         run: |
           sudo apt update
-          sudo apt install -y python3-semver
+          sudo apt install -y python3-semver python3-toml
 
       - name: Verify incremented version
         run: python ./scripts/check_version.py $(git describe --tags --abbrev=0)

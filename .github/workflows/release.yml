@@ -1,0 +1,52 @@
+name: Release Action
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Version
+        id: version
+        run: echo "version=$(python ./scripts/get_version.py)" >> "$GITHUB_OUTPUT"
+
+
+      - name: Build Linux x86_64-unknown-linux-gnu
+        run: |
+          cargo build --release
+          tar cvfJ ./spaceconf_${{ steps.version.outputs.version }}_linux_amd64.tar.xz ./target/x86_64-unknown-linux-gnu/release/spaceconf
+
+      - name: Tag release
+        run: |
+            git tag v${{ steps.version.outputs.version }}
+            git push --tags
+
+      - name: Build Changelog
+        id: changelog
+        uses: mikepenz/release-changelog-builder-action@v5
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+            configuration: "./.github/changelog.json"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+            body: ${{ steps.changelog.outputs.changelog }}
+            fail_on_unmatched_files: false
+            files: |
+                ./spaceconf_*.tar.xz
+            name: Release v${{ steps.version.outputs.version }}
+            token: ${{ secrets.GITHUB_TOKEN }}
+            tag_name: v${{ steps.version.outputs.version }}

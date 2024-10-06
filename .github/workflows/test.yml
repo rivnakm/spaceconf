@@ -1,0 +1,30 @@
+name: Test Action
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cache Rust build
+        if: github.event_name == 'pull_request'
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ github.event.number }}_target
+
+      - name: Run tests
+        run: cargo test

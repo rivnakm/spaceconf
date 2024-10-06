@@ -9,6 +9,7 @@ on:
 
 jobs:
     check-label:
+        name: Check Label
         runs-on: ubuntu-latest
         steps:
             - name: Check for category label
